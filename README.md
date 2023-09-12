@@ -1,7 +1,10 @@
+
 # OpenAI Go Client
 
 **This is an OpenAI client for Go I wrote for personal use. Do not expect it to
 necessarily be up to date quickly.**
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/jclem/openai-go.svg)](https://pkg.go.dev/github.com/jclem/openai-go)
 
 ## Usage
 
