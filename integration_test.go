@@ -70,5 +70,5 @@ func TestCreateStreamingChatCompletion(t *testing.T) {
 	}
 
 	require.NotEmpty(t, content)
-	require.NoError(t, resp.ReadCloser.Close())
+	require.NoError(t, resp.Close())
 }

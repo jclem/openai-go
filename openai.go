@@ -454,6 +454,43 @@ type StreamingChatCompletionObject struct {
 	Choices []StreamingChatCompletionChoice `json:"choices"`
 }
 
+// GetChoiceAt returns the choice at the given index.
+func (o *StreamingChatCompletionObject) GetChoiceAt(index int) (StreamingChatCompletionChoice, bool) {
+	if index < 0 || index >= len(o.Choices) {
+		return StreamingChatCompletionChoice{}, false
+	}
+
+	return o.Choices[index], true
+}
+
+// GetContentAt returns the content of the choice at the given index.
+func (o *StreamingChatCompletionObject) GetContentAt(index int) (string, bool) {
+	choice, ok := o.GetChoiceAt(index)
+	if !ok {
+		return "", false
+	}
+
+	if choice.Delta.Content == nil {
+		return "", false
+	}
+
+	return *choice.Delta.Content, true
+}
+
+// GetFunctionCallAt returns the function call of the choice at the given index.
+func (o *StreamingChatCompletionObject) GetFunctionCallAt(index int) (FunctionCall, bool) {
+	choice, ok := o.GetChoiceAt(index)
+	if !ok {
+		return FunctionCall{}, false
+	}
+
+	if choice.Delta.FunctionCall == nil {
+		return FunctionCall{}, false
+	}
+
+	return *choice.Delta.FunctionCall, true
+}
+
 const streamDoneString = "[DONE]"
 
 var errStreamIsDone = errors.New("completion stream is done")
@@ -481,19 +518,19 @@ type StreamingChatCompletionChoice struct {
 // A StreamingChatCompletionDelta is a single delta in a streaming chat
 // completion response.
 type StreamingChatCompletionDelta struct {
-	Role         string       `json:"role"`
-	Content      *string      `json:"content"`
-	FunctionCall FunctionCall `json:"function_call"`
+	Role         string        `json:"role"`
+	Content      *string       `json:"content"`
+	FunctionCall *FunctionCall `json:"function_call"`
 }
 
 // A StreamingChatCompletionResponse is a streaming response to a request to get
 // a chat completion. It reads an io.ReadCloser and emits
 // StreamingChatCompletionObjects.
 //
-// The caller is responsible for closing the ReadCloser.
+// The caller is responsible for closing the stream (`stream.Close()`).
 type StreamingChatCompletionResponse struct {
-	ReadCloser io.ReadCloser
-	scanner    *sseparser.StreamScanner
+	closer  io.Closer
+	scanner *sseparser.StreamScanner
 }
 
 // Next returns the next object in the streaming response.
@@ -517,9 +554,14 @@ func (s *StreamingChatCompletionResponse) Next() (*StreamingChatCompletionObject
 	return &evt.Data, nil
 }
 
+// Close closes the stream.
+func (s *StreamingChatCompletionResponse) Close() error {
+	return s.closer.Close()
+}
+
 func newStreamingChatCompletionResponse(rc io.ReadCloser) *StreamingChatCompletionResponse {
 	scanner := sseparser.NewStreamScanner(rc)
-	return &StreamingChatCompletionResponse{ReadCloser: rc, scanner: scanner}
+	return &StreamingChatCompletionResponse{closer: rc, scanner: scanner}
 }
 
 // NewHTTPClient creates a new HTTP client for the OpenAI API.
