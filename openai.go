@@ -181,6 +181,43 @@ type ChatCompletionResponse struct {
 	Usage   Usage                  `json:"usage"`
 }
 
+// GetChoiceAt returns the choice at the given index.
+func (r *ChatCompletionResponse) GetChoiceAt(index int) (ChatCompletionChoice, bool) {
+	if index < 0 || index >= len(r.Choices) {
+		return ChatCompletionChoice{}, false
+	}
+
+	return r.Choices[index], true
+}
+
+// GetContentAt returns the content of the choice at the given index.
+func (r *ChatCompletionResponse) GetContentAt(index int) (string, bool) {
+	choice, ok := r.GetChoiceAt(index)
+	if !ok {
+		return "", false
+	}
+
+	if choice.Message.Content == nil {
+		return "", false
+	}
+
+	return *choice.Message.Content, true
+}
+
+// GetFunctionCallAt returns the function call of the choice at the given index.
+func (r *ChatCompletionResponse) GetFunctionCallAt(index int) (FunctionCall, bool) {
+	choice, ok := r.GetChoiceAt(index)
+	if !ok {
+		return FunctionCall{}, false
+	}
+
+	if choice.Message.FunctionCall == nil {
+		return FunctionCall{}, false
+	}
+
+	return *choice.Message.FunctionCall, true
+}
+
 // A ChatCompletionChoice defines a completion choice in a chat completion response.
 type ChatCompletionChoice struct {
 	Index        int     `json:"index"`
