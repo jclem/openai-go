@@ -565,7 +565,7 @@ func newStreamingChatCompletionResponse(rc io.ReadCloser) *StreamingChatCompleti
 }
 
 // NewHTTPClient creates a new HTTP client for the OpenAI API.
-func NewHTTPClient(opts ...Opt) *HTTPClient {
+func NewHTTPClient(opts ...HTTPClientOpt) *HTTPClient {
 	client := HTTPClient{
 		http: http.DefaultClient,
 	}
@@ -577,18 +577,18 @@ func NewHTTPClient(opts ...Opt) *HTTPClient {
 	return &client
 }
 
-// Opt is a functional option for configuring the HTTP client.
-type Opt func(*HTTPClient)
+// HTTPClientOpt is a functional option for configuring the HTTP client.
+type HTTPClientOpt func(*HTTPClient)
 
 // WithKey sets the API key for the HTTP client.
-func WithKey(key string) Opt {
+func WithKey(key string) HTTPClientOpt {
 	return func(c *HTTPClient) {
 		c.key = key
 	}
 }
 
 // WithHTTPDoer sets the HTTP round tripper for the HTTP client.
-func WithHTTPDoer(doer HTTPDoer) Opt {
+func WithHTTPDoer(doer HTTPDoer) HTTPClientOpt {
 	return func(c *HTTPClient) {
 		c.http = doer
 	}
