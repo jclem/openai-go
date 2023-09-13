@@ -16,11 +16,17 @@ import (
 
 // A ChatClient is a chat client for the OpenAI API.
 type ChatClient interface {
-	// CreateChatCompletion generates a completion from a chat prompt. It returns a completion response.
-	CreateChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*ChatCompletionResponse, error)
+	// CreateCompletion generates a completion from a chat prompt. It returns a completion response.
+	CreateCompletion(model string, messages []Message, opts ...CreateChatCompletionOpt) (*ChatCompletionResponse, error)
 
-	// CreateStreamingChatCompletion generates a completion from a chat prompt. It returns a streaming completion response.
-	CreateStreamingChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error)
+	// CreateCompletionWithContext generates a completion from a chat prompt. It returns a completion response.
+	CreateCompletionWithContext(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*ChatCompletionResponse, error)
+
+	// CreateStreamingCompletion generates a completion from a chat prompt. It returns a streaming completion response.
+	CreateStreamingCompletion(model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error)
+
+	// CreateStreamingCompletionWithContext generates a completion from a chat prompt. It returns a streaming completion response.
+	CreateStreamingCompletionWithContext(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error)
 }
 
 // A Message is a message in a chat prompt.
@@ -335,10 +341,17 @@ type HTTPClient struct {
 	http httputil.HTTPDoer
 }
 
-// CreateChatCompletion implements the OpenAIClient interface using an HTTP request.
+// CreateCompletion implements the OpenAIClient interface using an HTTP request.
 //
 // It returns a parsed completion response.
-func (h *HTTPClient) CreateChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (resp *ChatCompletionResponse, err error) {
+func (h *HTTPClient) CreateCompletion(model string, messages []Message, opts ...CreateChatCompletionOpt) (*ChatCompletionResponse, error) {
+	return h.CreateCompletionWithContext(context.Background(), model, messages, opts...)
+}
+
+// CreateCompletionWithContext implements the OpenAIClient interface using an HTTP request.
+//
+// It returns a parsed completion response.
+func (h *HTTPClient) CreateCompletionWithContext(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (resp *ChatCompletionResponse, err error) {
 	httpResp, err := h.doChatCompletion(ctx, model, messages, opts...)
 	if err != nil {
 		return nil, err
@@ -357,11 +370,19 @@ func (h *HTTPClient) CreateChatCompletion(ctx context.Context, model string, mes
 	return resp, nil
 }
 
-// CreateStreamingChatCompletion implements the OpenAIClient interface using an HTTP request.
+// CreateStreamingCompletion implements the OpenAIClient interface using an HTTP request.
 //
 // It returns a StreamingChatCompletionResponse. The caller is responsible for
 // closing the response body included on the response struct.
-func (h *HTTPClient) CreateStreamingChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error) {
+func (h *HTTPClient) CreateStreamingCompletion(model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error) {
+	return h.CreateStreamingCompletionWithContext(context.Background(), model, messages, opts...)
+}
+
+// CreateStreamingCompletionWithContext implements the OpenAIClient interface using an HTTP request.
+//
+// It returns a StreamingChatCompletionResponse. The caller is responsible for
+// closing the response body included on the response struct.
+func (h *HTTPClient) CreateStreamingCompletionWithContext(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error) {
 	opts = append(opts, WithStream(true))
 	httpResp, err := h.doChatCompletion(ctx, model, messages, opts...)
 	if err != nil {

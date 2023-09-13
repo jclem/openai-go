@@ -2,7 +2,6 @@ package chat_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -103,8 +102,7 @@ func TestHTTPClient_CreateChatCompletion(t *testing.T) {
 		chat.WithKey(testKey),
 	)
 
-	resp, err := c.CreateChatCompletion(
-		context.Background(),
+	resp, err := c.CreateCompletion(
 		"gpt-3.5-turbo",
 		[]chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world"))},
 		chat.WithTemperature(0.5),
@@ -136,8 +134,7 @@ func TestHTTPClient_CreateStreamingChatCompletion(t *testing.T) {
 		chat.WithKey(testKey),
 	)
 
-	stream, err := c.CreateStreamingChatCompletion(
-		context.Background(),
+	stream, err := c.CreateStreamingCompletion(
 		"gpt-3.5-turbo",
 		[]chat.Message{},
 	)

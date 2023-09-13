@@ -4,7 +4,6 @@
 package embeddings_test
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -18,7 +17,7 @@ const input = "Hello, world."
 
 func TestCreateEmbeddings(t *testing.T) {
 	client := embeddings.NewHTTPClient(embeddings.WithKey(key))
-	resp, err := client.CreateEmbeddings(context.Background(), "text-embedding-ada-002", []string{input})
+	resp, err := client.CreateEmbeddings("text-embedding-ada-002", []string{input})
 	require.NoError(t, err)
 	require.NotEmpty(t, resp.Data[0].Embedding)
 }
