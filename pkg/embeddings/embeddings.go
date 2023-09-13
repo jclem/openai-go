@@ -14,10 +14,7 @@ import (
 // An EmbeddingsClient is a chat client for the OpenAI API.
 type EmbeddingsClient interface {
 	// CreateEmbeddings generates embeddings from a list of inputs.
-	CreateEmbeddings(model string, inputs []string, opts ...CreateEmbeddingsOpt) (*EmbeddingsResponse, error)
-
-	// CreateEmbeddingsWithContext generates embeddings from a list of inputs.
-	CreateEmbeddingsWithContext(ctx context.Context, model string, inputs []string, opts ...CreateEmbeddingsOpt) (*EmbeddingsResponse, error)
+	CreateEmbeddings(ctx context.Context, model string, inputs []string, opts ...CreateEmbeddingsOpt) (*EmbeddingsResponse, error)
 }
 
 type embeddingRequest struct {
@@ -66,12 +63,7 @@ type HTTPClient struct {
 }
 
 // CreateEmbeddings creates embeddings from a list of inputs.
-func (h *HTTPClient) CreateEmbeddings(model string, inputs []string, opts ...CreateEmbeddingsOpt) (resp *EmbeddingsResponse, err error) {
-	return h.CreateEmbeddingsWithContext(context.Background(), model, inputs, opts...)
-}
-
-// CreateEmbeddingsWithContext creates embeddings from a list of inputs.
-func (h *HTTPClient) CreateEmbeddingsWithContext(ctx context.Context, model string, inputs []string, opts ...CreateEmbeddingsOpt) (resp *EmbeddingsResponse, err error) {
+func (h *HTTPClient) CreateEmbeddings(ctx context.Context, model string, inputs []string, opts ...CreateEmbeddingsOpt) (resp *EmbeddingsResponse, err error) {
 	req := embeddingRequest{Model: model, Input: inputs}
 
 	for _, opt := range opts {

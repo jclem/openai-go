@@ -2,6 +2,7 @@ package embeddings_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -36,6 +37,7 @@ func TestHTTPClient_CreateEmbeddings(t *testing.T) {
 	)
 
 	resp, err := c.CreateEmbeddings(
+		context.Background(),
 		"ada",
 		[]string{"hello"},
 		embeddings.WithUser("user"),
