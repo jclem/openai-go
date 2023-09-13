@@ -95,7 +95,7 @@ client = embeddings.NewHTTPClient(
 )
 ```
 
-### Creating embeddings
+#### Creating embeddings
 
 Use `CreateEmbeddings` to create embeddings, and get back a parsed response.
 
