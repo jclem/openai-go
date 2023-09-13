@@ -1,5 +1,5 @@
-// Package openai provides a client for the OpenAI API.
-package openai
+// Package chat provides a chat client for the OpenAI API.
+package chat
 
 import (
 	"bytes"
@@ -10,20 +10,12 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/jclem/openai-go/internal/httputil"
 	"github.com/jclem/sseparser"
 )
 
-// An HTTPDoer is an HTTP client that can perform HTTP requests.
-type HTTPDoer interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-// An OpenAIClient is a client for the OpenAI API.
-type OpenAIClient interface {
-	// DoChatCompletion generates a completion from a chat prompt. It's a
-	// low-level API that returns an HTTP response directly.
-	DoChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*http.Response, error)
-
+// A ChatClient is a chat client for the OpenAI API.
+type ChatClient interface {
 	// CreateChatCompletion generates a completion from a chat prompt. It returns a completion response.
 	CreateChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*ChatCompletionResponse, error)
 
@@ -337,78 +329,17 @@ func WithAPIKey(apiKey string) CreateChatCompletionOpt {
 	}
 }
 
-// An ErrUnexpectedStatusCode is an error returned when the HTTP response has an
-// unexpected status code.
-//
-// In includes the expected and actual codes, as well as the response.
-type ErrUnexpectedStatusCode struct {
-	Expected int
-	Actual   int
-	Response *http.Response
-}
-
-// Error implements the error interface.
-func (e ErrUnexpectedStatusCode) Error() string {
-	return fmt.Sprintf("unexpected status code %d (expected %d)", e.Actual, e.Expected)
-}
-
-// HTTPClient is an HTTP client for the OpenAI API.
+// HTTPClient is an HTTP chat client for the OpenAI API.
 type HTTPClient struct {
 	key  string
-	http HTTPDoer
-}
-
-// DoChatCompletion implements the OpenAIClient interface using an HTTP request.
-//
-// If the request returns a non-200 status code, an ErrUnexpectedStatusCode is
-// returned.
-//
-// The caller is responsible for closing the response body included on the
-// response struct.
-func (h *HTTPClient) DoChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*http.Response, error) {
-	req := chatCompletionRequest{Model: model, Messages: messages}
-
-	for _, opt := range opts {
-		opt(&req)
-	}
-
-	b, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling chat completion request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/chat/completions", bytes.NewReader(b))
-	if err != nil {
-		return nil, fmt.Errorf("error creating HTTP request: %w", err)
-	}
-
-	var apiKey string
-	if req.apiKey != "" {
-		apiKey = req.apiKey
-	} else {
-		apiKey = h.key
-	}
-
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	httpResp, err := h.http.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("error performing HTTP request: %w", err)
-	}
-
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, ErrUnexpectedStatusCode{Expected: http.StatusOK, Actual: httpResp.StatusCode, Response: httpResp}
-	}
-
-	return httpResp, nil
+	http httputil.HTTPDoer
 }
 
 // CreateChatCompletion implements the OpenAIClient interface using an HTTP request.
 //
 // It returns a parsed completion response.
 func (h *HTTPClient) CreateChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (resp *ChatCompletionResponse, err error) {
-	httpResp, err := h.DoChatCompletion(ctx, model, messages, opts...)
+	httpResp, err := h.doChatCompletion(ctx, model, messages, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -432,12 +363,49 @@ func (h *HTTPClient) CreateChatCompletion(ctx context.Context, model string, mes
 // closing the response body included on the response struct.
 func (h *HTTPClient) CreateStreamingChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error) {
 	opts = append(opts, WithStream(true))
-	httpResp, err := h.DoChatCompletion(ctx, model, messages, opts...)
+	httpResp, err := h.doChatCompletion(ctx, model, messages, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	return newStreamingChatCompletionResponse(httpResp.Body), nil
+}
+
+func (h *HTTPClient) doChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*http.Response, error) {
+	req := chatCompletionRequest{Model: model, Messages: messages}
+
+	for _, opt := range opts {
+		opt(&req)
+	}
+
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling chat completion request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/chat/completions", bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("error creating HTTP request: %w", err)
+	}
+
+	apiKey := req.apiKey
+	if apiKey == "" {
+		apiKey = h.key
+	}
+
+	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := h.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("error performing HTTP request: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, httputil.ErrUnexpectedStatusCode{Expected: http.StatusOK, Actual: httpResp.StatusCode, Response: httpResp}
+	}
+
+	return httpResp, nil
 }
 
 type streamingChatCompletionEvent struct {
@@ -564,7 +532,7 @@ func newStreamingChatCompletionResponse(rc io.ReadCloser) *StreamingChatCompleti
 	return &StreamingChatCompletionResponse{closer: rc, scanner: scanner}
 }
 
-// NewHTTPClient creates a new HTTP client for the OpenAI API.
+// NewHTTPClient creates a new chat HTTP client for the OpenAI API.
 func NewHTTPClient(opts ...HTTPClientOpt) *HTTPClient {
 	client := HTTPClient{
 		http: http.DefaultClient,
@@ -588,7 +556,7 @@ func WithKey(key string) HTTPClientOpt {
 }
 
 // WithHTTPDoer sets the HTTP round tripper for the HTTP client.
-func WithHTTPDoer(doer HTTPDoer) HTTPClientOpt {
+func WithHTTPDoer(doer httputil.HTTPDoer) HTTPClientOpt {
 	return func(c *HTTPClient) {
 		c.http = doer
 	}

@@ -8,35 +8,23 @@ necessarily be up to date quickly.**
 
 ## Usage
 
-### Creating a client
+### Chat
+
+#### Creating a client
 
 ```go
-import "github.com/jclem/openai-go"
+import "github.com/jclem/openai-go/pkg/chat"
 
-client := openai.NewHTTPClient(openai.WithKey(yourApiKey))
+client := chat.NewHTTPClient(chat.WithKey(yourApiKey))
 
 // Optionally, provide a custom HTTP "Do"-er.
-client = openai.NewHTTPClient(
-	openai.WithKey(yourApiKey),
-	openai.WithHTTPDoer(http.DefaultClient),
+client = chat.NewHTTPClient(
+	chat.WithKey(yourApiKey),
+	chat.WithHTTPDoer(http.DefaultClient),
 )
 ```
 
-### Making a low-level completion call
-
-Use `DoChatCompletion` to create a chat completion call, and get back an
-`*http.Response`.
-
-```go
-httpresp, err := client.DoChatCompletion(
-	context.Background(),
-	"gpt-4",
-	[]openai.Message{openai.NewMessage("user", openai.WithMessageContent("Hello, world"))},
-	openai.WithTemperature(0.6),
-)
-```
-
-### Making a completion request
+#### Making a completion request
 
 Use `CreateChatCompletion` to create a chat completion call, and get back a
 parsed response.
@@ -45,15 +33,15 @@ parsed response.
 comp, err := client.CreateChatCompletion(
 	context.Background(),
 	"gpt-4",
-	[]openai.Message{openai.NewMessage("user", openai.WithMessageContent("Hello, world"))},
-	openai.WithTemperature(0.6),
+	[]chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world"))},
+	chat.WithTemperature(0.6),
 )
 
 // Various methods exist to easily read the completion.
 content, ok := comp.GetContentAt(0)
 ```
 
-### Making a streaming request
+#### Making a streaming request
 
 Use `CreateStreamingChatCompletion` to create a streaming chat completion call,
 and get back a streaming response.
@@ -62,8 +50,8 @@ and get back a streaming response.
 stream, err := client.CreateStreamingChatCompletion(
 	context.Background(),
 	"gpt-4",
-	[]openai.Message{openai.NewMessage("user", openai.WithMessageContent("Hello, world"))},
-	openai.WithTemperature(0.6),
+	[]chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world"))},
+	chat.WithTemperature(0.6),
 )
 
 // Call `stream.Next()` to get the next stream completion object. It'll return
@@ -89,4 +77,34 @@ for {
 if closeErr := stream.Close(); closeErr != nil {
 	// Handle error.
 }
+```
+
+### Embeddings
+
+#### Creating a client
+
+```go
+import "github.com/jclem/openai-go/pkg/embeddings"
+
+client := embeddings.NewHTTPClient(embeddings.WithKey(yourApiKey))
+
+// Optionally, provide a custom HTTP "Do"-er.
+client = embeddings.NewHTTPClient(
+	embeddings.WithKey(yourApiKey),
+	embeddings.WithHTTPDoer(http.DefaultClient),
+)
+```
+
+### Creating embeddings
+
+Use `CreateEmbeddings` to create embeddings, and get back a parsed response.
+
+```go
+resp, err := client.CreateEmbeddings(
+	context.Background(),
+	"text-embedding-ada-002",
+	[]string{"HEllo, world."},
+)
+
+var embedding []float64 = resp.Data[0].Embedding
 ```
