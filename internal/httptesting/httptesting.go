@@ -16,6 +16,7 @@ type TestDoer struct {
 // Do implements the HTTPDoer interface.
 func (t *TestDoer) Do(req *http.Request) (*http.Response, error) {
 	t.req = req
+
 	return t.resp, t.err
 }
 
@@ -30,7 +31,7 @@ type TestBody struct {
 }
 
 // Close implements the io.Closer interface.
-func (t TestBody) Close() error {
+func (TestBody) Close() error {
 	return nil
 }
 

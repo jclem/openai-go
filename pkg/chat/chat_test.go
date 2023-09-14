@@ -18,8 +18,10 @@ import (
 )
 
 func TestChatCompletionResponse_GetChoiceAt(t *testing.T) {
-	r := chat.ChatCompletionResponse{
-		Choices: []chat.ChatCompletionChoice{
+	t.Parallel()
+
+	r := chat.CompletionResponse{
+		Choices: []chat.CompletionChoice{
 			{
 				Message: chat.NewMessage("user", chat.WithMessageContent("ack")),
 			},
@@ -32,12 +34,13 @@ func TestChatCompletionResponse_GetChoiceAt(t *testing.T) {
 	ch, ok := r.GetChoiceAt(0)
 	require.True(t, ok)
 	assert.Equal(t, ch, r.Choices[0])
-
 }
 
 func TestChatCompletionResponse_GetContentAt(t *testing.T) {
-	r := chat.ChatCompletionResponse{
-		Choices: []chat.ChatCompletionChoice{
+	t.Parallel()
+
+	r := chat.CompletionResponse{
+		Choices: []chat.CompletionChoice{
 			{
 				Message: chat.NewMessage("user", chat.WithMessageContent("ack")),
 			},
@@ -56,13 +59,15 @@ func TestChatCompletionResponse_GetContentAt(t *testing.T) {
 }
 
 func TestChatCompletionResponse_GetFunctionCallAt(t *testing.T) {
+	t.Parallel()
+
 	call := chat.FunctionCall{
 		Name:      "my-function-call",
 		Arguments: []byte(`{"foo": "bar"}`),
 	}
 
-	r := chat.ChatCompletionResponse{
-		Choices: []chat.ChatCompletionChoice{
+	r := chat.CompletionResponse{
+		Choices: []chat.CompletionChoice{
 			{
 				Message: chat.NewMessage(
 					"user",
@@ -84,8 +89,10 @@ func TestChatCompletionResponse_GetFunctionCallAt(t *testing.T) {
 }
 
 func TestHTTPClient_CreateChatCompletion(t *testing.T) {
-	compresp := chat.ChatCompletionResponse{
-		Choices: []chat.ChatCompletionChoice{
+	t.Parallel()
+
+	compresp := chat.CompletionResponse{
+		Choices: []chat.CompletionChoice{
 			{
 				Message: chat.NewMessage("user", chat.WithMessageContent("ack")),
 			},
@@ -101,7 +108,7 @@ func TestHTTPClient_CreateChatCompletion(t *testing.T) {
 	testKey := "api-key"
 
 	svc := service.New(openai.DefaultBaseURL, testKey, &doer)
-	c := (*chat.ChatService)(svc)
+	c := (*chat.Service)(svc)
 
 	resp, err := c.CreateCompletion(
 		context.Background(),
@@ -119,6 +126,8 @@ func TestHTTPClient_CreateChatCompletion(t *testing.T) {
 }
 
 func TestHTTPClient_CreateStreamingChatCompletion(t *testing.T) {
+	t.Parallel()
+
 	msg := "ack"
 	r := &http.Response{}
 	r.StatusCode = http.StatusOK
@@ -132,7 +141,7 @@ func TestHTTPClient_CreateStreamingChatCompletion(t *testing.T) {
 	testKey := "api-key"
 
 	svc := service.New(openai.DefaultBaseURL, testKey, &doer)
-	c := (*chat.ChatService)(svc)
+	c := (*chat.Service)(svc)
 
 	stream, err := c.CreateStreamingCompletion(
 		context.Background(),
@@ -144,9 +153,9 @@ func TestHTTPClient_CreateStreamingChatCompletion(t *testing.T) {
 
 	obj, err := stream.Next()
 	require.NoError(t, err)
-	assert.Equal(t, &chat.StreamingChatCompletionObject{
-		Choices: []chat.StreamingChatCompletionChoice{
-			{Index: 0, Delta: chat.StreamingChatCompletionDelta{Role: "user", Content: &msg}},
+	assert.Equal(t, &chat.StreamingCompletionObject{
+		Choices: []chat.StreamingCompletionChoice{
+			{Index: 0, Delta: chat.StreamingCompletionDelta{Role: "user", Content: &msg}},
 		},
 	}, obj)
 }

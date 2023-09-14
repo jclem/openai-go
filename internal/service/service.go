@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,18 +17,18 @@ type Doer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-// An ErrUnexpectedStatusCode is an error returned when the HTTP response has an
+// An UnexpectedStatusCodeError is an error returned when the HTTP response has an
 // unexpected status code.
 //
 // In includes the expected and actual codes, as well as the response.
-type ErrUnexpectedStatusCode struct {
+type UnexpectedStatusCodeError struct {
 	Expected int
 	Actual   int
 	Response *http.Response
 }
 
 // Error implements the error interface.
-func (e ErrUnexpectedStatusCode) Error() string {
+func (e UnexpectedStatusCodeError) Error() string {
 	return fmt.Sprintf("unexpected status code %d (expected %d)", e.Actual, e.Expected)
 }
 
@@ -38,21 +39,28 @@ type Client struct {
 	doer    Doer
 }
 
-// NewRequest creates a new HTTP request.
-func (c *Client) NewRequest(method, url string, body any, opts ...RequestOpt) (*http.Request, error) {
-	u := c.baseURL.JoinPath(url)
+// NewRequestWithContext creates a new HTTP request.
+func (c *Client) NewRequestWithContext(
+	ctx context.Context,
+	method,
+	path string,
+	body any,
+	opts ...RequestOpt,
+) (*http.Request, error) {
+	u := c.baseURL.JoinPath(path)
 
 	var buf io.ReadWriter
 	if body != nil {
 		buf = &bytes.Buffer{}
 		enc := json.NewEncoder(buf)
 		enc.SetEscapeHTML(false)
+
 		if err := enc.Encode(body); err != nil {
 			return nil, fmt.Errorf("failed to encode body: %w", err)
 		}
 	}
 
-	req, err := http.NewRequest(method, u.String(), buf)
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -73,19 +81,18 @@ func (c *Client) NewRequest(method, url string, body any, opts ...RequestOpt) (*
 // Do performs an HTTP request.
 //
 // If v is nil, the response body is not closed, and the caller must close it.
-func (c *Client) Do(ctx context.Context, req *http.Request, v any) (resp *http.Response, err error) {
-	req = req.WithContext(ctx)
-
-	resp, err = c.doer.Do(req)
+func (c *Client) Do(req *http.Request, v any) (*http.Response, error) {
+	resp, err := c.doer.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
+
 	if v != nil {
-		defer resp.Body.Close() //nolint: errcheck
+		defer resp.Body.Close() //nolint: errcheck // No handling would be done here.
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp, ErrUnexpectedStatusCode{
+	if !(200 <= resp.StatusCode && resp.StatusCode <= 299) { //revive:disable-line:add-constant
+		return resp, UnexpectedStatusCodeError{
 			Expected: http.StatusOK,
 			Actual:   resp.StatusCode,
 			Response: resp,
@@ -98,9 +105,10 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v any) (resp *http.R
 		_, err = io.Copy(v, resp.Body)
 	default:
 		decErr := json.NewDecoder(resp.Body).Decode(v)
-		if decErr == io.EOF {
+		if errors.Is(decErr, io.EOF) {
 			decErr = nil
 		}
+
 		if decErr != nil {
 			err = decErr
 		}

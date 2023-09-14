@@ -15,8 +15,10 @@ import (
 )
 
 func TestClient_Chat_CreateCompletion(t *testing.T) {
-	compresp := chat.ChatCompletionResponse{
-		Choices: []chat.ChatCompletionChoice{
+	t.Parallel()
+
+	compresp := chat.CompletionResponse{
+		Choices: []chat.CompletionChoice{
 			{
 				Message: chat.NewMessage("user", chat.WithMessageContent("ack")),
 			},

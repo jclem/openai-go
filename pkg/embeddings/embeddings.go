@@ -9,8 +9,8 @@ import (
 	"github.com/jclem/openai-go/internal/service"
 )
 
-type embeddingRequest struct {
-	apiKey string `json:"-"`
+type request struct {
+	apiKey string
 
 	Model string   `json:"model"`
 	Input []string `json:"input"`
@@ -18,17 +18,17 @@ type embeddingRequest struct {
 }
 
 // CreateOpt is a functional option for configuring an embedding request.
-type CreateOpt func(*embeddingRequest)
+type CreateOpt func(*request)
 
 // WithUser sets the user ID for the request.
 func WithUser(user string) CreateOpt {
-	return func(req *embeddingRequest) {
+	return func(req *request) {
 		req.User = &user
 	}
 }
 
-// EmbeddingsResponse is a response from the embeddings API.
-type EmbeddingsResponse struct {
+// Response is a response from the embeddings API.
+type Response struct {
 	Object string      `json:"object"`
 	Data   []Embedding `json:"data"`
 	Model  string      `json:"model"`
@@ -48,25 +48,32 @@ type Usage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
-// EmbeddingsService is a service wrapping an OpenAI-compatible embeddings API.
-type EmbeddingsService service.Service
+// Service is a service wrapping an OpenAI-compatible embeddings API.
+type Service service.Service
 
 // Create creates embeddings from a list of inputs.
-func (h *EmbeddingsService) Create(ctx context.Context, model string, inputs []string, opts ...CreateOpt) (resp *EmbeddingsResponse, err error) {
-	req := embeddingRequest{Model: model, Input: inputs}
+func (h *Service) Create(
+	ctx context.Context,
+	model string,
+	inputs []string,
+	opts ...CreateOpt,
+) (*Response, error) {
+	req := request{Model: model, Input: inputs}
 
 	for _, opt := range opts {
 		opt(&req)
 	}
 
-	httpReq, err := h.Client.NewRequest(http.MethodPost, "/embeddings", req, service.WithAPIKey(req.apiKey))
+	httpReq, err := h.Client.NewRequestWithContext(ctx, http.MethodPost, "/embeddings", req,
+		service.WithAPIKey(req.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("error creating embeddings request: %w", err)
 	}
 
-	if _, err := h.Client.Do(ctx, httpReq, &resp); err != nil {
+	var resp Response
+	if _, err := h.Client.Do(httpReq, &resp); err != nil { //nolint: bodyclose // False positive.
 		return nil, fmt.Errorf("error performing embeddings request: %w", err)
 	}
 
-	return resp, nil
+	return &resp, nil
 }

@@ -16,7 +16,9 @@ import (
 )
 
 func TestHTTPClient_CreateEmbeddings(t *testing.T) {
-	embresp := embeddings.EmbeddingsResponse{
+	t.Parallel()
+
+	embresp := embeddings.Response{
 		Object: "list",
 		Data: []embeddings.Embedding{{
 			Index:     0,
@@ -34,7 +36,7 @@ func TestHTTPClient_CreateEmbeddings(t *testing.T) {
 	testKey := "api-key"
 
 	svc := service.New(openai.DefaultBaseURL, testKey, &doer)
-	c := (*embeddings.EmbeddingsService)(svc)
+	c := (*embeddings.Service)(svc)
 
 	resp, err := c.Create(
 		context.Background(),

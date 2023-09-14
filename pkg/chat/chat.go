@@ -62,8 +62,8 @@ type FunctionCall struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-type chatCompletionRequest struct {
-	apiKey string `json:"-"`
+type completionRequest struct {
+	apiKey string
 
 	Model            string               `json:"model"`
 	Messages         []Message            `json:"messages"`
@@ -114,6 +114,9 @@ type functionCallSetting struct {
 	Name  string
 }
 
+// ErrInvalidFunctionCallSetting is returned when a function call setting is invalid.
+var ErrInvalidFunctionCallSetting = errors.New("function call setting must have a value or a name")
+
 func (f functionCallSetting) MarshalJSON() ([]byte, error) {
 	if f.Value != "" {
 		b, err := json.Marshal(f.Value)
@@ -126,6 +129,7 @@ func (f functionCallSetting) MarshalJSON() ([]byte, error) {
 
 	if f.Name != "" {
 		obj := map[string]string{"name": f.Name}
+
 		b, err := json.Marshal(obj)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling function call setting name: %w", err)
@@ -134,46 +138,51 @@ func (f functionCallSetting) MarshalJSON() ([]byte, error) {
 		return b, nil
 	}
 
-	return nil, errors.New("function call setting must have a value or a name")
+	return nil, ErrInvalidFunctionCallSetting
 }
 
 func (f *functionCallSetting) UnmarshalJSON(b []byte) error {
 	var v string
 	if err := json.Unmarshal(b, &v); err == nil {
 		f.Value = v
+
 		return nil
 	}
 
 	var obj map[string]string
 	if err := json.Unmarshal(b, &obj); err == nil {
 		f.Name = obj["name"]
+
 		return nil
 	}
 
-	return errors.New(`function call setting must be a string or a map with a "name" key and string value`)
+	return ErrInvalidFunctionCallSetting
 }
 
-// A ChatCompletionResponse defines a response to a request to get a chat completion.
-type ChatCompletionResponse struct {
-	ID      string                 `json:"id"`
-	Object  string                 `json:"object"`
-	Created int64                  `json:"created"`
-	Model   string                 `json:"model"`
-	Choices []ChatCompletionChoice `json:"choices"`
-	Usage   Usage                  `json:"usage"`
+// A CompletionResponse defines a response to a request to get a completion.
+type CompletionResponse struct {
+	ID      string             `json:"id"`
+	Object  string             `json:"object"`
+	Created int64              `json:"created"`
+	Model   string             `json:"model"`
+	Choices []CompletionChoice `json:"choices"`
+	Usage   Usage              `json:"usage"`
 }
 
 // GetChoiceAt returns the choice at the given index.
-func (r *ChatCompletionResponse) GetChoiceAt(index int) (ChatCompletionChoice, bool) {
-	if index < 0 || index >= len(r.Choices) {
-		return ChatCompletionChoice{}, false
+//
+// If the index is out of bounds, it returns false (but a negative index will
+// panic).
+func (r *CompletionResponse) GetChoiceAt(index int) (CompletionChoice, bool) {
+	if index >= len(r.Choices) {
+		return CompletionChoice{}, false
 	}
 
 	return r.Choices[index], true
 }
 
 // GetContentAt returns the content of the choice at the given index.
-func (r *ChatCompletionResponse) GetContentAt(index int) (string, bool) {
+func (r *CompletionResponse) GetContentAt(index int) (string, bool) {
 	choice, ok := r.GetChoiceAt(index)
 	if !ok {
 		return "", false
@@ -187,7 +196,7 @@ func (r *ChatCompletionResponse) GetContentAt(index int) (string, bool) {
 }
 
 // GetFunctionCallAt returns the function call of the choice at the given index.
-func (r *ChatCompletionResponse) GetFunctionCallAt(index int) (FunctionCall, bool) {
+func (r *CompletionResponse) GetFunctionCallAt(index int) (FunctionCall, bool) {
 	choice, ok := r.GetChoiceAt(index)
 	if !ok {
 		return FunctionCall{}, false
@@ -200,8 +209,8 @@ func (r *ChatCompletionResponse) GetFunctionCallAt(index int) (FunctionCall, boo
 	return *choice.Message.FunctionCall, true
 }
 
-// A ChatCompletionChoice defines a completion choice in a chat completion response.
-type ChatCompletionChoice struct {
+// A CompletionChoice defines a completion choice in a completion response.
+type CompletionChoice struct {
 	Index        int     `json:"index"`
 	Message      Message `json:"message"`
 	FinishReason string  `json:"finish_reason"`
@@ -214,186 +223,200 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// CreateCompletionOpt is a functional option for configuring a chat completion request.
-type CreateCompletionOpt func(*chatCompletionRequest)
+// CreateCompletionOpt is a functional option for configuring a completion request.
+type CreateCompletionOpt func(*completionRequest)
 
-// WithFunctions sets the functions for the chat completion request.
+// WithFunctions sets the functions for the completion request.
 func WithFunctions(functions ...FunctionDefinition) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.Functions = functions
 	}
 }
 
-// WithFunctionCallBySetting sets the function call for the chat completion request.
+// WithFunctionCallBySetting sets the function call for the completion request.
 //
 // Use this option if you're passing a predefined value such as "none" or "auto".
 func WithFunctionCallBySetting(value string) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.FunctionCall = &functionCallSetting{Value: value}
 	}
 }
 
-// WithFunctionCallByName sets the function call for the chat completion request.
+// WithFunctionCallByName sets the function call for the completion request.
 //
 // Use this option if you're passing a specific function by name.
 func WithFunctionCallByName(name string) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.FunctionCall = &functionCallSetting{Name: name}
 	}
 }
 
-// WithTemperature sets the temperature for the chat completion request.
+// WithTemperature sets the temperature for the completion request.
 func WithTemperature(temperature float64) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.Temperature = &temperature
 	}
 }
 
-// WithTopP sets the top p for the chat completion request.
+// WithTopP sets the top p for the completion request.
 func WithTopP(topP float64) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.TopP = &topP
 	}
 }
 
-// WithN sets the n for the chat completion request.
+// WithN sets the n for the completion request.
 func WithN(n int) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.N = &n
 	}
 }
 
-// WithStream sets the stream for the chat completion request.
+// WithStream sets the stream for the completion request.
 func WithStream(stream bool) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.Stream = &stream
 	}
 }
 
-// WithStop sets the stop for the chat completion request.
+// WithStop sets the stop for the completion request.
 func WithStop(stop ...string) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.Stop = stop
 	}
 }
 
-// WithMaxTokens sets the max tokens for the chat completion request.
+// WithMaxTokens sets the max tokens for the completion request.
 func WithMaxTokens(maxTokens int) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.MaxTokens = &maxTokens
 	}
 }
 
-// WithPresencePenalty sets the presence penalty for the chat completion request.
+// WithPresencePenalty sets the presence penalty for the completion request.
 func WithPresencePenalty(presencePenalty float64) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.PresencePenalty = &presencePenalty
 	}
 }
 
-// WithFrequencyPenalty sets the frequency penalty for the chat completion request.
+// WithFrequencyPenalty sets the frequency penalty for the completion request.
 func WithFrequencyPenalty(frequencyPenalty float64) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.FrequencyPenalty = &frequencyPenalty
 	}
 }
 
-// WithLogitBias sets the logit bias for the chat completion request.
+// WithLogitBias sets the logit bias for the completion request.
 func WithLogitBias(logitBias map[string]float64) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.LogitBias = logitBias
 	}
 }
 
-// WithUser sets the user for the chat completion request.
+// WithUser sets the user for the completion request.
 func WithUser(user string) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.User = &user
 	}
 }
 
-// WithAPIKey sets the API key for the chat completion request.
+// WithAPIKey sets the API key for the completion request.
 func WithAPIKey(apiKey string) CreateCompletionOpt {
-	return func(r *chatCompletionRequest) {
+	return func(r *completionRequest) {
 		r.apiKey = apiKey
 	}
 }
 
-// ChatService is a service wrapping an OpenAI-compatible chat completions API.
-type ChatService service.Service
+// Service is a service wrapping an OpenAI-compatible completions API.
+type Service service.Service
 
 // CreateCompletion implements the OpenAIClient interface using an HTTP request.
 //
 // It returns a parsed completion response.
-func (h *ChatService) CreateCompletion(ctx context.Context, model string, messages []Message, opts ...CreateCompletionOpt) (resp *ChatCompletionResponse, err error) {
-	req := chatCompletionRequest{Model: model, Messages: messages}
+func (h *Service) CreateCompletion(
+	ctx context.Context,
+	model string,
+	messages []Message,
+	opts ...CreateCompletionOpt,
+) (*CompletionResponse, error) {
+	req := completionRequest{Model: model, Messages: messages}
 
 	for _, opt := range opts {
 		opt(&req)
 	}
 
-	httpReq, err := h.Client.NewRequest(http.MethodPost, "/chat/completions", req, service.WithAPIKey(req.apiKey))
+	httpReq, err := h.Client.NewRequestWithContext(ctx, http.MethodPost, "/chat/completions", req,
+		service.WithAPIKey(req.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("error creating HTTP request: %w", err)
 	}
 
-	if _, err := h.Client.Do(ctx, httpReq, &resp); err != nil {
+	var resp CompletionResponse
+	if _, err := h.Client.Do(httpReq, &resp); err != nil { //nolint: bodyclose // False positive.
 		return nil, fmt.Errorf("error performing HTTP request: %w", err)
 	}
 
-	return resp, nil
+	return &resp, nil
 }
 
 // CreateStreamingCompletion implements the OpenAIClient interface using an HTTP request.
 //
-// It returns a StreamingChatCompletionResponse. The caller is responsible for
+// It returns a StreamingCompletionResponse. The caller is responsible for
 // closing the response body included on the response struct.
-func (h *ChatService) CreateStreamingCompletion(ctx context.Context, model string, messages []Message, opts ...CreateCompletionOpt) (*StreamingChatCompletionResponse, error) {
-	req := chatCompletionRequest{Model: model, Messages: messages}
+func (h *Service) CreateStreamingCompletion(
+	ctx context.Context,
+	model string,
+	messages []Message,
+	opts ...CreateCompletionOpt,
+) (*StreamingCompletionResponse, error) {
+	req := completionRequest{Model: model, Messages: messages}
+
 	opts = append(opts, WithStream(true))
 
 	for _, opt := range opts {
 		opt(&req)
 	}
 
-	httpReq, err := h.Client.NewRequest(http.MethodPost, "/chat/completions", req, service.WithAPIKey(req.apiKey))
+	httpReq, err := h.Client.NewRequestWithContext(ctx, http.MethodPost, "/chat/completions", req,
+		service.WithAPIKey(req.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("error creating HTTP request: %w", err)
 	}
 
-	httpResp, err := h.Client.Do(ctx, httpReq, nil)
+	httpResp, err := h.Client.Do(httpReq, nil) //nolint: bodyclose // False positive.
 	if err != nil {
 		return nil, fmt.Errorf("error performing HTTP request: %w", err)
 	}
 
-	return newStreamingChatCompletionResponse(httpResp.Body), nil
+	return newStreamingCompletionResponse(httpResp.Body), nil
 }
 
-type streamingChatCompletionEvent struct {
-	Data StreamingChatCompletionObject `sse:"data"`
+type streamingCompletionEvent struct {
+	Data StreamingCompletionObject `sse:"data"`
 }
 
-// A StreamingChatCompletionObject is a single chunk of a streaming chat
+// A StreamingCompletionObject is a single chunk of a streaming chat
 // completion response.
-type StreamingChatCompletionObject struct {
-	ID      string                          `json:"id"`
-	Object  string                          `json:"object"`
-	Created int64                           `json:"created"`
-	Model   string                          `json:"model"`
-	Choices []StreamingChatCompletionChoice `json:"choices"`
+type StreamingCompletionObject struct {
+	ID      string                      `json:"id"`
+	Object  string                      `json:"object"`
+	Created int64                       `json:"created"`
+	Model   string                      `json:"model"`
+	Choices []StreamingCompletionChoice `json:"choices"`
 }
 
 // GetChoiceAt returns the choice at the given index.
-func (o *StreamingChatCompletionObject) GetChoiceAt(index int) (StreamingChatCompletionChoice, bool) {
-	if index < 0 || index >= len(o.Choices) {
-		return StreamingChatCompletionChoice{}, false
+func (o *StreamingCompletionObject) GetChoiceAt(index int) (StreamingCompletionChoice, bool) {
+	if index >= len(o.Choices) {
+		return StreamingCompletionChoice{}, false
 	}
 
 	return o.Choices[index], true
 }
 
 // GetContentAt returns the content of the choice at the given index.
-func (o *StreamingChatCompletionObject) GetContentAt(index int) (string, bool) {
+func (o *StreamingCompletionObject) GetContentAt(index int) (string, bool) {
 	choice, ok := o.GetChoiceAt(index)
 	if !ok {
 		return "", false
@@ -407,7 +430,7 @@ func (o *StreamingChatCompletionObject) GetContentAt(index int) (string, bool) {
 }
 
 // GetFunctionCallAt returns the function call of the choice at the given index.
-func (o *StreamingChatCompletionObject) GetFunctionCallAt(index int) (FunctionCall, bool) {
+func (o *StreamingCompletionObject) GetFunctionCallAt(index int) (FunctionCall, bool) {
 	choice, ok := o.GetChoiceAt(index)
 	if !ok {
 		return FunctionCall{}, false
@@ -422,42 +445,44 @@ func (o *StreamingChatCompletionObject) GetFunctionCallAt(index int) (FunctionCa
 
 const streamDoneString = "[DONE]"
 
-var errStreamIsDone = errors.New("completion stream is done")
+// ErrStreamDone is returned when the stream is done (marked by "[DONE]").
+var ErrStreamDone = errors.New("completion stream is done")
 
-func (o *StreamingChatCompletionObject) UnmarshalSSEValue(v string) error {
+// UnmarshalSSEValue implements sseparser.UnmarshalerSSEValue.
+func (o *StreamingCompletionObject) UnmarshalSSEValue(v string) error {
 	if v == streamDoneString {
-		return errStreamIsDone
+		return ErrStreamDone
 	}
 
 	if err := json.Unmarshal([]byte(v), o); err != nil {
-		return fmt.Errorf("error unmarshaling streaming chat completion object: %w", err)
+		return fmt.Errorf("error unmarshaling streaming completion object: %w", err)
 	}
 
 	return nil
 }
 
-// A StreamingChatCompletionChoice is a single choice in a streaming chat
+// A StreamingCompletionChoice is a single choice in a streaming chat
 // completion response.
-type StreamingChatCompletionChoice struct {
-	Index        int                          `json:"index"`
-	Delta        StreamingChatCompletionDelta `json:"delta"`
-	FinishReason *string                      `json:"finish_reason"`
+type StreamingCompletionChoice struct {
+	Index        int                      `json:"index"`
+	Delta        StreamingCompletionDelta `json:"delta"`
+	FinishReason *string                  `json:"finish_reason"`
 }
 
-// A StreamingChatCompletionDelta is a single delta in a streaming chat
+// A StreamingCompletionDelta is a single delta in a streaming chat
 // completion response.
-type StreamingChatCompletionDelta struct {
+type StreamingCompletionDelta struct {
 	Role         string        `json:"role"`
 	Content      *string       `json:"content"`
 	FunctionCall *FunctionCall `json:"function_call"`
 }
 
-// A StreamingChatCompletionResponse is a streaming response to a request to get
-// a chat completion. It reads an io.ReadCloser and emits
-// StreamingChatCompletionObjects.
+// A StreamingCompletionResponse is a streaming response to a request to get
+// a completion. It reads an io.ReadCloser and emits
+// StreamingCompletionObjects.
 //
 // The caller is responsible for closing the stream (`stream.Close()`).
-type StreamingChatCompletionResponse struct {
+type StreamingCompletionResponse struct {
 	closer  io.Closer
 	scanner *sseparser.StreamScanner
 }
@@ -465,16 +490,17 @@ type StreamingChatCompletionResponse struct {
 // Next returns the next object in the streaming response.
 //
 // When the stream is complete, it returns nil, nil.
-func (s *StreamingChatCompletionResponse) Next() (*StreamingChatCompletionObject, error) {
-	var evt streamingChatCompletionEvent
+func (s *StreamingCompletionResponse) Next() (*StreamingCompletionObject, error) {
+	var evt streamingCompletionEvent
+
 	_, err := s.scanner.UnmarshalNext(&evt)
 	if err != nil {
 		if errors.Is(err, sseparser.ErrStreamEOF) {
-			return nil, nil
+			return nil, fmt.Errorf("stream ended before [DONE]: %w", err)
 		}
 
-		if errors.Is(err, errStreamIsDone) {
-			return nil, nil
+		if errors.Is(err, ErrStreamDone) {
+			return nil, ErrStreamDone
 		}
 
 		return nil, fmt.Errorf("error reading next object from stream: %w", err)
@@ -484,11 +510,16 @@ func (s *StreamingChatCompletionResponse) Next() (*StreamingChatCompletionObject
 }
 
 // Close closes the stream.
-func (s *StreamingChatCompletionResponse) Close() error {
-	return s.closer.Close()
+func (s *StreamingCompletionResponse) Close() error {
+	if err := s.closer.Close(); err != nil {
+		return fmt.Errorf("error closing stream: %w", err)
+	}
+
+	return nil
 }
 
-func newStreamingChatCompletionResponse(rc io.ReadCloser) *StreamingChatCompletionResponse {
+func newStreamingCompletionResponse(rc io.ReadCloser) *StreamingCompletionResponse {
 	scanner := sseparser.NewStreamScanner(rc)
-	return &StreamingChatCompletionResponse{closer: rc, scanner: scanner}
+
+	return &StreamingCompletionResponse{closer: rc, scanner: scanner}
 }

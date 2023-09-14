@@ -5,6 +5,7 @@ package chat_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"testing"
@@ -18,8 +19,10 @@ import (
 var key = os.Getenv("OPENAI_API_KEY")
 
 func TestCreateChatCompletion(t *testing.T) {
+	t.Parallel()
+
 	svc := service.New(openai.DefaultBaseURL, key, http.DefaultClient)
-	c := (*chat.ChatService)(svc)
+	c := (*chat.Service)(svc)
 
 	messages := []chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world."))}
 	resp, err := c.CreateCompletion(context.Background(), "gpt-3.5-turbo", messages, chat.WithMaxTokens(16))
@@ -28,8 +31,10 @@ func TestCreateChatCompletion(t *testing.T) {
 }
 
 func TestCreateStreamingChatCompletion(t *testing.T) {
+	t.Parallel()
+
 	svc := service.New(openai.DefaultBaseURL, key, http.DefaultClient)
-	c := (*chat.ChatService)(svc)
+	c := (*chat.Service)(svc)
 
 	messages := []chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world."))}
 	resp, err := c.CreateStreamingCompletion(context.Background(), "gpt-3.5-turbo", messages, chat.WithMaxTokens(16))
@@ -39,11 +44,12 @@ func TestCreateStreamingChatCompletion(t *testing.T) {
 
 	for {
 		obj, err := resp.Next()
-		require.NoError(t, err)
 
-		if obj == nil {
+		if errors.Is(err, chat.ErrStreamDone) {
 			break
 		}
+
+		require.NoError(t, err)
 
 		if obj.Choices[0].Delta.Content != nil {
 			content += *(obj.Choices[0].Delta.Content)

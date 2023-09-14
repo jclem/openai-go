@@ -20,8 +20,10 @@ var key = os.Getenv("OPENAI_API_KEY")
 const input = "Hello, world."
 
 func TestCreateEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	svc := service.New(openai.DefaultBaseURL, key, http.DefaultClient)
-	c := (*embeddings.EmbeddingsService)(svc)
+	c := (*embeddings.Service)(svc)
 	resp, err := c.Create(context.Background(), "text-embedding-ada-002", []string{input})
 	require.NoError(t, err)
 	require.NotEmpty(t, resp.Data[0].Embedding)

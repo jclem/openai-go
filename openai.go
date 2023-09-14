@@ -24,8 +24,8 @@ type Doer interface {
 
 // A Client is an OpenAI-compatible API client.
 type Client struct {
-	Chat       *chat.ChatService
-	Embeddings *embeddings.EmbeddingsService
+	Chat       *chat.Service
+	Embeddings *embeddings.Service
 
 	key     string
 	baseURL *url.URL
@@ -45,7 +45,7 @@ func NewClient(opts ...ClientOpt) *Client {
 	}
 
 	c.common = service.New(c.baseURL, c.key, c.doer)
-	c.Chat = (*chat.ChatService)(c.common)
+	c.Chat = (*chat.Service)(c.common)
 
 	return &c
 }
