@@ -58,12 +58,13 @@ stream, err := client.Chat.CreateStreamingCompletion(
 // `nil, nil` when done.
 for {
 	chunk, err := stream.Next()
-	if err != nil {
-		// Handle error.
+
+	if errors.Is(err, chat.ErrStreamDone) {
+		break
 	}
 
-	if chunk == nil {
-		break
+	if err != nil {
+		// Handle error.
 	}
 
 	// Various methods exist to easily read the stream chunk.
