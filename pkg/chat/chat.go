@@ -2,7 +2,6 @@
 package chat
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,18 +9,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/jclem/openai-go/internal/httputil"
+	"github.com/jclem/openai-go/internal/service"
 	"github.com/jclem/sseparser"
 )
-
-// A ChatClient is a chat client for the OpenAI API.
-type ChatClient interface {
-	// CreateChatCompletion generates a completion from a chat prompt. It returns a completion response.
-	CreateChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*ChatCompletionResponse, error)
-
-	// CreateStreamingChatCompletion generates a completion from a chat prompt. It returns a streaming completion response.
-	CreateStreamingChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error)
-}
 
 // A Message is a message in a chat prompt.
 type Message struct {
@@ -224,11 +214,11 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// CreateChatCompletionOpt is a functional option for configuring a chat completion request.
-type CreateChatCompletionOpt func(*chatCompletionRequest)
+// CreateCompletionOpt is a functional option for configuring a chat completion request.
+type CreateCompletionOpt func(*chatCompletionRequest)
 
 // WithFunctions sets the functions for the chat completion request.
-func WithFunctions(functions ...FunctionDefinition) CreateChatCompletionOpt {
+func WithFunctions(functions ...FunctionDefinition) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.Functions = functions
 	}
@@ -237,7 +227,7 @@ func WithFunctions(functions ...FunctionDefinition) CreateChatCompletionOpt {
 // WithFunctionCallBySetting sets the function call for the chat completion request.
 //
 // Use this option if you're passing a predefined value such as "none" or "auto".
-func WithFunctionCallBySetting(value string) CreateChatCompletionOpt {
+func WithFunctionCallBySetting(value string) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.FunctionCall = &functionCallSetting{Value: value}
 	}
@@ -246,166 +236,137 @@ func WithFunctionCallBySetting(value string) CreateChatCompletionOpt {
 // WithFunctionCallByName sets the function call for the chat completion request.
 //
 // Use this option if you're passing a specific function by name.
-func WithFunctionCallByName(name string) CreateChatCompletionOpt {
+func WithFunctionCallByName(name string) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.FunctionCall = &functionCallSetting{Name: name}
 	}
 }
 
 // WithTemperature sets the temperature for the chat completion request.
-func WithTemperature(temperature float64) CreateChatCompletionOpt {
+func WithTemperature(temperature float64) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.Temperature = &temperature
 	}
 }
 
 // WithTopP sets the top p for the chat completion request.
-func WithTopP(topP float64) CreateChatCompletionOpt {
+func WithTopP(topP float64) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.TopP = &topP
 	}
 }
 
 // WithN sets the n for the chat completion request.
-func WithN(n int) CreateChatCompletionOpt {
+func WithN(n int) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.N = &n
 	}
 }
 
 // WithStream sets the stream for the chat completion request.
-func WithStream(stream bool) CreateChatCompletionOpt {
+func WithStream(stream bool) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.Stream = &stream
 	}
 }
 
 // WithStop sets the stop for the chat completion request.
-func WithStop(stop ...string) CreateChatCompletionOpt {
+func WithStop(stop ...string) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.Stop = stop
 	}
 }
 
 // WithMaxTokens sets the max tokens for the chat completion request.
-func WithMaxTokens(maxTokens int) CreateChatCompletionOpt {
+func WithMaxTokens(maxTokens int) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.MaxTokens = &maxTokens
 	}
 }
 
 // WithPresencePenalty sets the presence penalty for the chat completion request.
-func WithPresencePenalty(presencePenalty float64) CreateChatCompletionOpt {
+func WithPresencePenalty(presencePenalty float64) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.PresencePenalty = &presencePenalty
 	}
 }
 
 // WithFrequencyPenalty sets the frequency penalty for the chat completion request.
-func WithFrequencyPenalty(frequencyPenalty float64) CreateChatCompletionOpt {
+func WithFrequencyPenalty(frequencyPenalty float64) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.FrequencyPenalty = &frequencyPenalty
 	}
 }
 
 // WithLogitBias sets the logit bias for the chat completion request.
-func WithLogitBias(logitBias map[string]float64) CreateChatCompletionOpt {
+func WithLogitBias(logitBias map[string]float64) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.LogitBias = logitBias
 	}
 }
 
 // WithUser sets the user for the chat completion request.
-func WithUser(user string) CreateChatCompletionOpt {
+func WithUser(user string) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.User = &user
 	}
 }
 
 // WithAPIKey sets the API key for the chat completion request.
-func WithAPIKey(apiKey string) CreateChatCompletionOpt {
+func WithAPIKey(apiKey string) CreateCompletionOpt {
 	return func(r *chatCompletionRequest) {
 		r.apiKey = apiKey
 	}
 }
 
-// HTTPClient is an HTTP chat client for the OpenAI API.
-type HTTPClient struct {
-	key  string
-	http httputil.HTTPDoer
-}
+// ChatService is a service wrapping an OpenAI-compatible chat completions API.
+type ChatService service.Service
 
-// CreateChatCompletion implements the OpenAIClient interface using an HTTP request.
+// CreateCompletion implements the OpenAIClient interface using an HTTP request.
 //
 // It returns a parsed completion response.
-func (h *HTTPClient) CreateChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (resp *ChatCompletionResponse, err error) {
-	httpResp, err := h.doChatCompletion(ctx, model, messages, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if closeErr := httpResp.Body.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("error closing HTTP response body: %w", closeErr)
-		}
-	}()
-
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("error decoding chat completion response: %w", err)
-	}
-
-	return resp, nil
-}
-
-// CreateStreamingChatCompletion implements the OpenAIClient interface using an HTTP request.
-//
-// It returns a StreamingChatCompletionResponse. The caller is responsible for
-// closing the response body included on the response struct.
-func (h *HTTPClient) CreateStreamingChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*StreamingChatCompletionResponse, error) {
-	opts = append(opts, WithStream(true))
-	httpResp, err := h.doChatCompletion(ctx, model, messages, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	return newStreamingChatCompletionResponse(httpResp.Body), nil
-}
-
-func (h *HTTPClient) doChatCompletion(ctx context.Context, model string, messages []Message, opts ...CreateChatCompletionOpt) (*http.Response, error) {
+func (h *ChatService) CreateCompletion(ctx context.Context, model string, messages []Message, opts ...CreateCompletionOpt) (resp *ChatCompletionResponse, err error) {
 	req := chatCompletionRequest{Model: model, Messages: messages}
 
 	for _, opt := range opts {
 		opt(&req)
 	}
 
-	b, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling chat completion request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/chat/completions", bytes.NewReader(b))
+	httpReq, err := h.Client.NewRequest(http.MethodPost, "/chat/completions", req, service.WithAPIKey(req.apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("error creating HTTP request: %w", err)
 	}
 
-	apiKey := req.apiKey
-	if apiKey == "" {
-		apiKey = h.key
+	if _, err := h.Client.Do(ctx, httpReq, &resp); err != nil {
+		return nil, fmt.Errorf("error performing HTTP request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-	httpReq.Header.Set("Content-Type", "application/json")
+	return resp, nil
+}
 
-	httpResp, err := h.http.Do(httpReq)
+// CreateStreamingCompletion implements the OpenAIClient interface using an HTTP request.
+//
+// It returns a StreamingChatCompletionResponse. The caller is responsible for
+// closing the response body included on the response struct.
+func (h *ChatService) CreateStreamingCompletion(ctx context.Context, model string, messages []Message, opts ...CreateCompletionOpt) (*StreamingChatCompletionResponse, error) {
+	req := chatCompletionRequest{Model: model, Messages: messages}
+	opts = append(opts, WithStream(true))
+
+	for _, opt := range opts {
+		opt(&req)
+	}
+
+	httpReq, err := h.Client.NewRequest(http.MethodPost, "/chat/completions", req, service.WithAPIKey(req.apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("error creating HTTP request: %w", err)
+	}
+
+	httpResp, err := h.Client.Do(ctx, httpReq, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error performing HTTP request: %w", err)
 	}
 
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, httputil.ErrUnexpectedStatusCode{Expected: http.StatusOK, Actual: httpResp.StatusCode, Response: httpResp}
-	}
-
-	return httpResp, nil
+	return newStreamingChatCompletionResponse(httpResp.Body), nil
 }
 
 type streamingChatCompletionEvent struct {
@@ -530,34 +491,4 @@ func (s *StreamingChatCompletionResponse) Close() error {
 func newStreamingChatCompletionResponse(rc io.ReadCloser) *StreamingChatCompletionResponse {
 	scanner := sseparser.NewStreamScanner(rc)
 	return &StreamingChatCompletionResponse{closer: rc, scanner: scanner}
-}
-
-// NewHTTPClient creates a new chat HTTP client for the OpenAI API.
-func NewHTTPClient(opts ...HTTPClientOpt) *HTTPClient {
-	client := HTTPClient{
-		http: http.DefaultClient,
-	}
-
-	for _, opt := range opts {
-		opt(&client)
-	}
-
-	return &client
-}
-
-// HTTPClientOpt is a functional option for configuring the HTTP client.
-type HTTPClientOpt func(*HTTPClient)
-
-// WithKey sets the API key for the HTTP client.
-func WithKey(key string) HTTPClientOpt {
-	return func(c *HTTPClient) {
-		c.key = key
-	}
-}
-
-// WithHTTPDoer sets the HTTP round tripper for the HTTP client.
-func WithHTTPDoer(doer httputil.HTTPDoer) HTTPClientOpt {
-	return func(c *HTTPClient) {
-		c.http = doer
-	}
 }

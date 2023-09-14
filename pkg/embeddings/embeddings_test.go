@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/jclem/openai-go"
 	"github.com/jclem/openai-go/internal/httptesting"
+	"github.com/jclem/openai-go/internal/service"
 	"github.com/jclem/openai-go/pkg/embeddings"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,12 +33,10 @@ func TestHTTPClient_CreateEmbeddings(t *testing.T) {
 	doer := httptesting.NewTestDoer(r, nil)
 	testKey := "api-key"
 
-	c := embeddings.NewHTTPClient(
-		embeddings.WithHTTPDoer(&doer),
-		embeddings.WithKey(testKey),
-	)
+	svc := service.New(openai.DefaultBaseURL, testKey, &doer)
+	c := (*embeddings.EmbeddingsService)(svc)
 
-	resp, err := c.CreateEmbeddings(
+	resp, err := c.Create(
 		context.Background(),
 		"ada",
 		[]string{"hello"},

@@ -5,9 +5,12 @@ package chat_test
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"testing"
 
+	"github.com/jclem/openai-go"
+	"github.com/jclem/openai-go/internal/service"
 	"github.com/jclem/openai-go/pkg/chat"
 	"github.com/stretchr/testify/require"
 )
@@ -15,19 +18,21 @@ import (
 var key = os.Getenv("OPENAI_API_KEY")
 
 func TestCreateChatCompletion(t *testing.T) {
-	client := chat.NewHTTPClient(chat.WithKey(key))
+	svc := service.New(openai.DefaultBaseURL, key, http.DefaultClient)
+	c := (*chat.ChatService)(svc)
 
 	messages := []chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world."))}
-	resp, err := client.CreateChatCompletion(context.Background(), "gpt-3.5-turbo", messages, chat.WithMaxTokens(16))
+	resp, err := c.CreateCompletion(context.Background(), "gpt-3.5-turbo", messages, chat.WithMaxTokens(16))
 	require.NoError(t, err)
 	require.NotEmpty(t, resp.Choices[0].Message.Content)
 }
 
 func TestCreateStreamingChatCompletion(t *testing.T) {
-	client := chat.NewHTTPClient(chat.WithKey(key))
+	svc := service.New(openai.DefaultBaseURL, key, http.DefaultClient)
+	c := (*chat.ChatService)(svc)
 
 	messages := []chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world."))}
-	resp, err := client.CreateStreamingChatCompletion(context.Background(), "gpt-3.5-turbo", messages, chat.WithMaxTokens(16))
+	resp, err := c.CreateStreamingCompletion(context.Background(), "gpt-3.5-turbo", messages, chat.WithMaxTokens(16))
 	require.NoError(t, err)
 
 	content := ""

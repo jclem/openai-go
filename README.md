@@ -8,29 +8,28 @@ necessarily be up to date quickly.**
 
 ## Usage
 
-### Chat
+### Creating a client
 
-#### Creating a client
+```go
+import "github.com/jclem/openai-go"
+
+client := openai.NewClient(openai.WithKey(yourAPIKey))
+
+// Optionally, provide a custom HTTP "Do"-er.
+client = openai.NewClient(
+	openai.WithKey(yourApiKey),
+	openai.WithDoer(http.DefaultClient),
+)
+```
+
+### Making a completion request
+
+Use the client's chat service to create a completion call.
 
 ```go
 import "github.com/jclem/openai-go/pkg/chat"
 
-client := chat.NewHTTPClient(chat.WithKey(yourApiKey))
-
-// Optionally, provide a custom HTTP "Do"-er.
-client = chat.NewHTTPClient(
-	chat.WithKey(yourApiKey),
-	chat.WithHTTPDoer(http.DefaultClient),
-)
-```
-
-#### Making a completion request
-
-Use `CreateChatCompletion` to create a chat completion call, and get back a
-parsed response.
-
-```go
-comp, err := client.CreateChatCompletion(
+comp, err := client.Chat.CreateCompletion(
 	context.Background(),
 	"gpt-4",
 	[]chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world"))},
@@ -41,13 +40,14 @@ comp, err := client.CreateChatCompletion(
 content, ok := comp.GetContentAt(0)
 ```
 
-#### Making a streaming request
+### Making a streaming completion request
 
-Use `CreateStreamingChatCompletion` to create a streaming chat completion call,
-and get back a streaming response.
+Use the client's chat service to create a streaming completion call.
 
 ```go
-stream, err := client.CreateStreamingChatCompletion(
+import "github.com/jclem/openai-go/pkg/chat"
+
+stream, err := client.Chat.CreateStreamingCompletion(
 	context.Background(),
 	"gpt-4",
 	[]chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world"))},
@@ -79,28 +79,12 @@ if closeErr := stream.Close(); closeErr != nil {
 }
 ```
 
-### Embeddings
-
-#### Creating a client
-
-```go
-import "github.com/jclem/openai-go/pkg/embeddings"
-
-client := embeddings.NewHTTPClient(embeddings.WithKey(yourApiKey))
-
-// Optionally, provide a custom HTTP "Do"-er.
-client = embeddings.NewHTTPClient(
-	embeddings.WithKey(yourApiKey),
-	embeddings.WithHTTPDoer(http.DefaultClient),
-)
-```
-
-#### Creating embeddings
+### Creating embeddings
 
 Use `CreateEmbeddings` to create embeddings, and get back a parsed response.
 
 ```go
-resp, err := client.CreateEmbeddings(
+resp, err := client.Embeddings.Create(
 	context.Background(),
 	"text-embedding-ada-002",
 	[]string{"HEllo, world."},

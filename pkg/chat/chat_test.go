@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jclem/openai-go"
 	"github.com/jclem/openai-go/internal/httptesting"
+	"github.com/jclem/openai-go/internal/service"
 	"github.com/jclem/openai-go/pkg/chat"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -98,12 +100,10 @@ func TestHTTPClient_CreateChatCompletion(t *testing.T) {
 	doer := httptesting.NewTestDoer(r, nil)
 	testKey := "api-key"
 
-	c := chat.NewHTTPClient(
-		chat.WithHTTPDoer(&doer),
-		chat.WithKey(testKey),
-	)
+	svc := service.New(openai.DefaultBaseURL, testKey, &doer)
+	c := (*chat.ChatService)(svc)
 
-	resp, err := c.CreateChatCompletion(
+	resp, err := c.CreateCompletion(
 		context.Background(),
 		"gpt-3.5-turbo",
 		[]chat.Message{chat.NewMessage("user", chat.WithMessageContent("Hello, world"))},
@@ -131,12 +131,10 @@ func TestHTTPClient_CreateStreamingChatCompletion(t *testing.T) {
 	doer := httptesting.NewTestDoer(r, nil)
 	testKey := "api-key"
 
-	c := chat.NewHTTPClient(
-		chat.WithHTTPDoer(&doer),
-		chat.WithKey(testKey),
-	)
+	svc := service.New(openai.DefaultBaseURL, testKey, &doer)
+	c := (*chat.ChatService)(svc)
 
-	stream, err := c.CreateStreamingChatCompletion(
+	stream, err := c.CreateStreamingCompletion(
 		context.Background(),
 		"gpt-3.5-turbo",
 		[]chat.Message{},
